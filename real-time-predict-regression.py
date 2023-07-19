@@ -16,7 +16,7 @@ for i in range(24):
 
 while True:
     real = obterSimbolo('WDO$', n=24, delayCandles=60)
-    dados = obterSimbolo('WDO$', n=1001, delayCandles=24+50)
+    dados = obterSimbolo('WDO$', n=1001, delayCandles=24+60)
     hist = dados.copy().drop(columns=['tick_volume', 'real_volume', 'spread'])
     for i in range(1000):
         hist['open'+str(i+1)] = hist['open'].shift(i+1)
@@ -39,10 +39,9 @@ while True:
         previsaoX = {}
         for col in colunas0:
             previsaoX[col] = previsao.iloc[-1][col+'-'+str(i+1)]
-            # previsaoTable = previsaoTable.drop(columns=col+'-'+str(i+1))
         previsaoTable = pd.concat([previsaoTable, pd.DataFrame([previsaoX], index=timestamp)])
     print(previsaoTable)
-    fig = mplf.figure(figsize=(15, 4))
+    fig = mplf.figure(figsize=(150, 40))
     mplf.plot(real, type='candle', ax=fig.add_subplot(2, 1, 1))
     mplf.plot(previsaoTable, type='candle', ax=fig.add_subplot(2, 1, 2))
     mplf.show()
