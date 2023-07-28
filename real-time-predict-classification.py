@@ -1,20 +1,45 @@
 from pickle import load
 from obterDados import obterSimbolo
 import numpy as np
+from time import sleep
 import warnings
+from firebase_admin import credentials, firestore, initialize_app
 
-warnings.simplefilter(action='ignore')
 classificador = load(open('modeloClassificadorMLP.pickle', 'rb'))
+initialize_app(credentials.Certificate('key.json'))
+db = firestore.client()
+predictionsCollection = db.collection('predictions')
 
 count = 0
 actions = ['Nada', 'Compra', 'Venda']
-while True:
-    dados = obterSimbolo('WDO$', n=1000, delayCandles=count)
-    hist = dados.copy().drop(columns=['spread'])
-    x = np.append(hist.iloc[::-1].to_numpy().flatten(), dados.index[-1].hour)
-    previsao = classificador.predict([x])
-    
-    if previsao[0] != 0:
-        print(hist.index[-1], actions[previsao[0]])
 
-    count += 1
+lastPred = None
+lastTimestamp = None
+
+while True:
+    dados = obterSimbolo('WDO$', n=1000, delayCandles=0)
+    hist = dados.copy().drop(columns=['spread'])
+    hist['hour'] = hist.index.hour
+    histNP = hist.to_numpy()
+    vmax = histNP[:, :4].max()
+    vmin = histNP[:, :4].min()
+    histNP[:, :4] = (histNP[:, :4] - vmin) / (vmax - vmin)
+    vmax = histNP[:, 4].max()
+    vmin = histNP[:, 4].min()
+    histNP[:, 4] = (histNP[:, 4] - vmin) / (vmax - vmin)
+    vmax = histNP[:, 5].max()
+    vmin = histNP[:, 5].min()
+    histNP[:, 5] = (histNP[:, 5] - vmin) / (vmax - vmin)
+    histNP[:, 6] /= 24
+    previsao = int(classificador.predict([histNP.flatten()])[0])
+    
+    timestamp = hist.index[-1]
+    print(timestamp, actions[previsao])
+
+    if previsao != 0:
+        if lastTimestamp != hist.index[-1] or lastPred != previsao:
+            print('escreve')
+
+    lastPred = previsao
+    lastTimestamp = hist.index[-1]
+    sleep(10)
