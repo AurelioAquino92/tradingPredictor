@@ -1,10 +1,8 @@
 from pickle import load
 from obterDados import obterSimbolo
 import numpy as np
-import warnings
 
-warnings.simplefilter(action='ignore')
-classificador = load(open('modeloClassificadorMLP.pickle', 'rb'))
+classificador = load(open('modeloClassificadorXGBoost.pickle', 'rb'))
 
 count = 0
 actions = ['Nada', 'Compra', 'Venda']
