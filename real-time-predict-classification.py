@@ -5,7 +5,7 @@ from time import sleep
 import warnings
 from firebase_admin import credentials, firestore, initialize_app
 
-classificador = load(open('modeloClassificadorMLP.pickle', 'rb'))
+classificador = load(open('models/modeloClassificadorXGBoost.pickle', 'rb'))
 initialize_app(credentials.Certificate('key.json'))
 db = firestore.client()
 predictionsCollection = db.collection('predictions')
