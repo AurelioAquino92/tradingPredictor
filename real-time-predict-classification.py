@@ -13,7 +13,7 @@ predictionsCollection = db.collection('predictions')
 count = 0
 actions = ['Nada', 'Compra', 'Venda']
 
-lastPred = None
+lastPred = -1
 lastTimestamp = None
 
 while True:
@@ -34,11 +34,13 @@ while True:
     previsao = int(classificador.predict([histNP.flatten()])[0])
     
     timestamp = hist.index[-1]
-    print(timestamp, actions[previsao])
 
-    if previsao != 0:
-        if lastTimestamp != hist.index[-1] or lastPred != previsao:
-            print('escreve')
+    if lastTimestamp != hist.index[-1] or lastPred != previsao:
+        print('nova previsão:', timestamp, previsao)
+        predictionsCollection.document(str(timestamp)).set({
+            'previsao': actions[previsao],
+            'price': hist['close'][-1]
+        })
 
     lastPred = previsao
     lastTimestamp = hist.index[-1]
