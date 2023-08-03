@@ -17,7 +17,7 @@ lastPred = -1
 lastTimestamp = None
 
 while True:
-    dados = obterSimbolo('WDO$', n=1000, delayCandles=0)
+    dados = obterSimbolo('WDO$N', n=1000, delayCandles=0)
     hist = dados.copy().drop(columns=['spread'])
     hist['hour'] = hist.index.hour
     histNP = hist.to_numpy()
@@ -36,7 +36,7 @@ while True:
     timestamp = hist.index[-1]
 
     if lastTimestamp != hist.index[-1] or lastPred != previsao:
-        print('nova previsão:', timestamp, previsao)
+        print('nova previsão:', timestamp, actions[previsao])
         predictionsCollection.document(str(timestamp)).set({
             'previsao': actions[previsao],
             'price': hist['close'][-1]
@@ -44,4 +44,4 @@ while True:
 
     lastPred = previsao
     lastTimestamp = hist.index[-1]
-    sleep(10)
+    sleep(5)
