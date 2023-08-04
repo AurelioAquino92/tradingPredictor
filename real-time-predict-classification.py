@@ -1,11 +1,9 @@
 from pickle import load
 from obterDados import obterSimbolo
-import numpy as np
 from time import sleep
-import warnings
 from firebase_admin import credentials, firestore, initialize_app
 
-classificador = load(open('models/modeloClassificadorXGBoost.pickle', 'rb'))
+classificador = load(open('models/modeloClassificadorExtraTrees.pickle', 'rb'))
 initialize_app(credentials.Certificate('key.json'))
 db = firestore.client()
 predictionsCollection = db.collection('predictions')
