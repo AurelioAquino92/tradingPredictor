@@ -3,7 +3,7 @@ from obterDados import obterSimbolo
 from time import sleep
 from firebase_admin import credentials, firestore, initialize_app
 
-classificador = load(open('models/modeloClassificadorExtraTrees.pickle', 'rb'))
+classificador = load(open('models/modeloClassificadorKNN.pickle', 'rb'))
 initialize_app(credentials.Certificate('key.json'))
 db = firestore.client()
 predictionsCollection = db.collection('predictions')
@@ -12,8 +12,10 @@ count = 0
 actions = ['Nada', 'Compra', 'Venda']
 
 lastPred = -1
+lastPrice = 0
 lastTimestamp = None
 
+# for i in range(110):
 while True:
     dados = obterSimbolo('WDO$N', n=1000, delayCandles=0)
     hist = dados.copy().drop(columns=['spread'])
@@ -35,11 +37,13 @@ while True:
 
     if lastTimestamp != hist.index[-1] or lastPred != previsao:
         print('nova previsão:', timestamp, actions[previsao])
+    if lastPrice != hist['close'][-1]:
         predictionsCollection.document(str(timestamp)).set({
             'previsao': actions[previsao],
             'price': hist['close'][-1]
         })
 
     lastPred = previsao
+    lastPrice = hist['close'][-1]
     lastTimestamp = hist.index[-1]
-    sleep(5)
+    sleep(2)
