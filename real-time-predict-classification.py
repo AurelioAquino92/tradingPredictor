@@ -2,6 +2,8 @@ from pickle import load
 from obterDados import obterSimbolo
 from time import sleep
 from firebase_admin import credentials, firestore, initialize_app
+from keras.models import load_model
+import numpy as np
 
 initialize_app(credentials.Certificate('key.json'))
 db = firestore.client()
@@ -19,13 +21,15 @@ for modelo in modelos:
         load(open(f'models/modeloClassificador{modelo}.pickle', 'rb'))
     )
 
+modeloCNN = load_model('models/tf-cnn-model')
+
 actionNames = ['Nada', 'Compra', 'Venda']
 
 lastPred = -1
 lastPrice = 0
 lastTimestamp = None
 
-# for i in range(40, -1, -1):
+# for i in range(108*10, -1, -1):
 while True:
     try:
         dados = obterSimbolo('WDO$N', n=1000, delayCandles=0)
@@ -55,6 +59,7 @@ while True:
         for classificador in classificadores:
             previsao = actionNames[int(classificador.predict([histNP.flatten()])[0])]
             previsoes[modelos[classificadores.index(classificador)]] = previsao
+        previsoes['CNN'] = actionNames[np.argmax(modeloCNN.predict(np.array([histNP]), verbose=0)[0])]
         
         timestamp = hist.index[-1]
         if lastTimestamp != hist.index[-1] or lastPred != previsao:
