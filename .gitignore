@@ -2,3 +2,4 @@ key.json
 models/
 data/
 logs/
+tmp/
