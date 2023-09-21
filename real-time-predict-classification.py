@@ -1,27 +1,30 @@
 from pickle import load
-from obterDados import obterSimbolo
+from obterDados import obterSimboloPosicao, obterSimboloData
 from time import sleep
 from firebase_admin import credentials, firestore, initialize_app
 from keras.models import load_model
 import numpy as np
 from datetime import datetime
 
+print('Iniciando conexão com Firebase...')
 initialize_app(credentials.Certificate('key.json'))
 db = firestore.client()
 predictionsCollection = db.collection('predictions')
 
 modelos = [
-    "ExtraTrees10000",
-    "XGBoost10000"
+    "ExtraTrees",
+    "XGBoost"
 ]
 
+print('Carregando modelos...')
 classificadores = []
 for modelo in modelos:
     classificadores.append(
-        load(open(f'models/modeloClassificador{modelo}.pickle', 'rb'))
+        load(open(f'models/modeloClassificador{modelo}3006.pickle', 'rb'))
     )
 
 modeloCNN = load_model('models/tf-cnn-model')
+print('Finalizado! Iniciando previsões...')
 
 actionNames = ['Nada', 'Compra', 'Venda']
 
@@ -32,49 +35,56 @@ lastTimestamp = None
 def setPredictions(delay=0):
     global lastPred, lastPrice, lastTimestamp
     try:
-        dados = obterSimbolo('WDO$N', n=1000, delayCandles=delay)
-        hist = dados.copy().drop(columns=['spread'])
-        hist['minute'] = hist.index.minute
-        hist['hour'] = hist.index.hour
-        hist['day_of_week'] = hist.index.day_of_week
-        hist['day'] = hist.index.day
-        histNP = hist.to_numpy()
-        vmax = histNP[:, :4].max()
-        vmin = histNP[:, :4].min()
-        histNP[:, :4] = (histNP[:, :4] - vmin) / (vmax - vmin)
-        vmax = histNP[:, 4].max()
-        vmin = histNP[:, 4].min()
-        histNP[:, 4] = (histNP[:, 4] - vmin) / (vmax - vmin)
-        vmax = histNP[:, 5].max()
-        vmin = histNP[:, 5].min()
-        histNP[:, 5] = (histNP[:, 5] - vmin) / (vmax - vmin)
-        histNP[:, 6] /= 60
-        histNP[:, 7] /= 24
-        histNP[:, 8] /= 4
-        histNP[:, 9] /= 31
+        histM5 = obterSimboloPosicao('WDO$N', n=300, delayCandles=i)
+        histM5['minute'] = histM5.index.minute
+        histM5['hour'] = histM5.index.hour
+        histM5['day_of_week'] = histM5.index.day_of_week
+        histM5['day'] = histM5.index.day
+        histM5NP = histM5.to_numpy()
+        hist = np.zeros((501, 6))
+        hist[0, -4:] = histM5NP[-1][-4:]
+        hist[1:301] = histM5NP[:, :6]
+        histD1 = obterSimboloData(histM5.index[-1])
+        histD1NP = histD1.to_numpy()
+        hist[301:] = histD1NP
+        vmax = hist[1:, :4].max()
+        vmin = hist[1:, :4].min()
+        hist[1:, :4] = (hist[1:, :4] - vmin) / (vmax - vmin)
+        vmax = hist[1:, 4].max()
+        vmin = hist[1:, 4].min()
+        hist[1:, 4] = (hist[1:, 4] - vmin) / (vmax - vmin)
+        vmax = hist[1:, 5].max()
+        vmin = hist[1:, 5].min()
+        hist[1:, 5] = (hist[1:, 5] - vmin) / (vmax - vmin)
+        hist[0, 2] /= 60
+        hist[0, 3] /= 24
+        hist[0, 4] /= 4
+        hist[0, 5] /= 31
 
         previsoes = {}
         
         for classificador in classificadores:
-            previsao = actionNames[int(classificador.predict([histNP.flatten()])[0])]
+            previsao = actionNames[int(classificador.predict([hist.flatten()])[0])]
             previsoes[modelos[classificadores.index(classificador)]] = previsao
-        previsoes['CNN'] = actionNames[np.argmax(modeloCNN.predict(np.array([histNP]), verbose=0)[0])]
+        stats = modeloCNN.predict(np.array([hist]), verbose=0)[0]
+        previsoes['CNN'] = actionNames[np.argmax(stats)]
         
-        timestamp = hist.index[-1]
-        if lastTimestamp != hist.index[-1] or lastPred != previsao:
+        timestamp = histM5.index[-1]
+        if lastTimestamp != histM5.index[-1] or lastPred != previsao:
             print('novas previsões:', timestamp, previsoes)
             file = open('lastTimeStamp.txt', 'w')
-            file.write(str(hist.index[-1]))
+            file.write(str(histM5.index[-1]))
             file.close()
-        if lastPrice != hist['close'][-1]:
+        if lastPrice != histM5['close'][-1] or lastTimestamp != histM5.index[-1]:
+            print('CNN Stats: ', np.round(stats, 3))
             predictionsCollection.document(str(timestamp)).set({
                 'previsoes': previsoes,
-                'price': hist['close'][-1]
+                'price': histM5['close'][-1]
             })
 
         lastPred = previsao
-        lastPrice = hist['close'][-1]
-        lastTimestamp = hist.index[-1]
+        lastPrice = histM5['close'][-1]
+        lastTimestamp = histM5.index[-1]
     except Exception as e:
         print('Erro: ', e)
 
@@ -83,7 +93,7 @@ try:
     file = open('lastTimeStamp.txt', 'r')
     lastTimestamp = datetime.strptime(file.read(), '%Y-%m-%d %H:%M:%S')
     while True:
-        dados = obterSimbolo(delayCandles=updateFrom)
+        dados = obterSimboloPosicao(delayCandles=updateFrom)
         if dados.index[-1] >= lastTimestamp:
             updateFrom += 1
         else:
