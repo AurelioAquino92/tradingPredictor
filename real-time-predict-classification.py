@@ -13,7 +13,8 @@ predictionsCollection = db.collection('predictions')
 
 modelos = [
     "ExtraTrees",
-    "XGBoost"
+    "XGBoost",
+    "KNN"
 ]
 
 print('Carregando modelos...')
