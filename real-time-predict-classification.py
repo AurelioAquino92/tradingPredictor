@@ -101,7 +101,7 @@ try:
             break
 except Exception as e:
     print(e)
-    updateFrom = 108 * 100 # 100 dias de pregao
+    updateFrom = 108 * 50 # 50 dias de pregao
 
 for i in range(updateFrom, -1, -1):
     setPredictions(i)
