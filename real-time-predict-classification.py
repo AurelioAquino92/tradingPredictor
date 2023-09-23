@@ -25,7 +25,6 @@ for modelo in modelos:
     )
 
 modeloCNN = load_model('models/tf-cnn-model')
-print('Finalizado! Iniciando previsões...')
 
 actionNames = ['Nada', 'Compra', 'Venda']
 
@@ -48,15 +47,27 @@ def setPredictions(delay=0):
         histD1 = obterSimboloData(histM5.index[-1])
         histD1NP = histD1.to_numpy()
         hist[301:] = histD1NP
-        vmax = hist[1:, :4].max()
-        vmin = hist[1:, :4].min()
-        hist[1:, :4] = (hist[1:, :4] - vmin) / (vmax - vmin)
-        vmax = hist[1:, 4].max()
-        vmin = hist[1:, 4].min()
-        hist[1:, 4] = (hist[1:, 4] - vmin) / (vmax - vmin)
-        vmax = hist[1:, 5].max()
-        vmin = hist[1:, 5].min()
-        hist[1:, 5] = (hist[1:, 5] - vmin) / (vmax - vmin)
+        # nomalização M5
+        vmax = hist[1:301, :4].max()
+        vmin = hist[1:301, :4].min()
+        hist[1:301, :4] = (hist[1:301, :4] - vmin) / (vmax - vmin)
+        vmax = hist[1:301, 4].max()
+        vmin = hist[1:301, 4].min()
+        hist[1:301, 4] = (hist[1:301, 4] - vmin) / (vmax - vmin)
+        vmax = hist[1:301, 5].max()
+        vmin = hist[1:301, 5].min()
+        hist[1:301, 5] = (hist[1:301, 5] - vmin) / (vmax - vmin)
+        # nomalização D1
+        vmax = hist[301:, :4].max()
+        vmin = hist[301:, :4].min()
+        hist[301:, :4] = (hist[301:, :4] - vmin) / (vmax - vmin)
+        vmax = hist[301:, 4].max()
+        vmin = hist[301:, 4].min()
+        hist[301:, 4] = (hist[301:, 4] - vmin) / (vmax - vmin)
+        vmax = hist[301:, 5].max()
+        vmin = hist[301:, 5].min()
+        hist[301:, 5] = (hist[301:, 5] - vmin) / (vmax - vmin)
+        # nomalização de dados temporais
         hist[0, 2] /= 60
         hist[0, 3] /= 24
         hist[0, 4] /= 4
@@ -65,7 +76,7 @@ def setPredictions(delay=0):
         previsoes = {}
         
         for classificador in classificadores:
-            previsao = actionNames[int(classificador.predict([hist.flatten()])[0])]
+            previsao = actionNames[classificador.predict([hist.flatten()])[0]]
             previsoes[modelos[classificadores.index(classificador)]] = previsao
         stats = modeloCNN.predict(np.array([hist]), verbose=0)[0]
         previsoes['CNN'] = actionNames[np.argmax(stats)]
@@ -89,6 +100,7 @@ def setPredictions(delay=0):
     except Exception as e:
         print('Erro: ', e)
 
+print('Verificando último candle processado...')
 updateFrom = 0
 try:
     file = open('lastTimeStamp.txt', 'r')
@@ -100,8 +112,10 @@ try:
         else:
             break
 except Exception as e:
-    print(e)
+    print('Erro ao abrir obter último candle processado')
     updateFrom = 108 * 50 # 50 dias de pregao
+
+print('Finalizado! Iniciando previsões...')
 
 for i in range(updateFrom, -1, -1):
     setPredictions(i)
