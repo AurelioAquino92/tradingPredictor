@@ -3,4 +3,4 @@ models/
 data/
 logs/
 tmp/
-lastTimeStamp.txt
+*.txt
