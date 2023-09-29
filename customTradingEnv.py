@@ -17,7 +17,7 @@ class CustomTradingEnv(gym.Env):
 
         # Definir o espaço de ação e observação
         self.action_space = gym.spaces.Discrete(3)  # Três ações possíveis: fazer nada, comprar, vender
-        self.observation_space = gym.spaces.Box(low=0, high=np.inf, shape=(self.observation_window_5min + self.observation_window_daily + 7,), dtype=np.float32)
+        self.observation_space = gym.spaces.Box(low=0, high=np.inf, shape=(self.observation_window_5min + self.observation_window_daily + 5,), dtype=np.float32)
 
         # Definir a hora de fechamento das posições abertas
         self.closing_time = pd.Timestamp("17:00").time()
