@@ -85,6 +85,9 @@ class CustomTradingEnv(gym.Env):
         if self.net_worth < -1000 and self.shares_held == 0:
             self.done = True
 
+        if self.current_step == len(self.df_5min) - 1:
+            self.done = True
+
         return self._get_observation(), reward, self.done, {
             'shares': self.shares_held,
             'net_worth': self.net_worth,
@@ -99,7 +102,7 @@ class CustomTradingEnv(gym.Env):
         dailyStep = self.df_daily.index.get_loc(pd.Timestamp(self.df_5min.index[self.current_step].date()))
         self.observation_daily = self.df_daily['Close'].to_numpy()[dailyStep-self.observation_window_daily:dailyStep].tolist()
 
-        observation = np.array(self.observation_5min + self.observation_daily + [self.balance, self.shares_held, self.net_worth])
+        observation = np.array(self.observation_5min + self.observation_daily + [self.shares_held])
         # Adicionar o dia da semana, dia do mês, hora e minuto do timestep atual
         current_time = self.df_5min.index[self.current_step]
         day_of_week = current_time.dayofweek
