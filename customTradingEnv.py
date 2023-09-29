@@ -48,7 +48,8 @@ class CustomTradingEnv(gym.Env):
 
         if action == 1:  # Comprar
             if self.balance > 0:
-                shares_to_buy = min(self.balance // current_price_5min, int(self.balance / 2))  # Limitar o número de ações compradas
+                # shares_to_buy = min(self.balance // current_price_5min, int(self.balance / 2))  # Limitar o número de ações compradas
+                shares_to_buy = 1
                 cost = shares_to_buy * current_price_5min
                 self.balance -= cost
                 self.shares_held += shares_to_buy
@@ -75,11 +76,15 @@ class CustomTradingEnv(gym.Env):
 
         self.net_worth = self.balance + self.shares_held * current_price_5min
 
-        # Verificar se o saldo está abaixo de -1000
-        if self.net_worth < -1000:
+        # Verificar se o saldo está abaixo de -1000 quando não há posições abertas
+        if self.net_worth < -1000 and self.shares_held == 0:
             self.done = True
 
-        return self._get_observation(), reward, self.done, {}
+        return self._get_observation(), reward, self.done, {
+            'shares': self.shares_held,
+            'net_worth': self.net_worth,
+            'balance': self.balance
+        }
 
     def _get_observation(self):
         # Obter preços do M5 e D1 para observação
