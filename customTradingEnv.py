@@ -24,7 +24,7 @@ class CustomTradingEnv(gym.Env):
 
     def reset(self):
         self.balance = self.initial_balance
-        self.current_step = 0
+        self.current_step = self.observation_window_5min
         self.shares_held = 0
         self.net_worth = self.balance
         self.trades = []  # Manter um registro de todas as negociações
@@ -45,10 +45,6 @@ class CustomTradingEnv(gym.Env):
             return self._get_observation(), 0, self.done, {}
 
         current_price_5min = self.df_5min.iloc[self.current_step]['Close']
-
-        self.observation_5min = self.df_5min['Close'].to_numpy()[-self.observation_window_5min:].tolist()
-        dailyStep = self.df_daily.index.get_loc(pd.Timestamp(self.df_5min.index[self.current_step].date()))
-        self.observation_daily = self.df_daily['Close'].to_numpy()[dailyStep-self.observation_window_daily:dailyStep].tolist()
 
         if action == 1:  # Comprar
             if self.balance > 0:
@@ -86,6 +82,11 @@ class CustomTradingEnv(gym.Env):
         return self._get_observation(), reward, self.done, {}
 
     def _get_observation(self):
+        # Obter preços do M5 e D1 para observação
+        self.observation_5min = self.df_5min['Close'].to_numpy()[-self.observation_window_5min:].tolist()
+        dailyStep = self.df_daily.index.get_loc(pd.Timestamp(self.df_5min.index[self.current_step].date()))
+        self.observation_daily = self.df_daily['Close'].to_numpy()[dailyStep-self.observation_window_daily:dailyStep].tolist()
+
         observation = np.array(self.observation_5min + self.observation_daily + [self.balance, self.shares_held, self.net_worth])
         # Adicionar o dia da semana, dia do mês, hora e minuto do timestep atual
         current_time = self.df_5min.index[self.current_step]
