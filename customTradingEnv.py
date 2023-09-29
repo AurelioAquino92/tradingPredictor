@@ -72,7 +72,12 @@ class CustomTradingEnv(gym.Env):
             current_time = self.df_5min.index[self.current_step]
             if current_time.time() >= self.closing_time:
                 # Fechar a posição automaticamente se estiver aberta após as 17:00
-                self.done = True
+                if self.shares_held > 0:
+                    revenue = self.shares_held * current_price_5min
+                    self.balance += revenue
+                    self.shares_held = 0
+                    self.trades.append((self.current_step, "Sell", current_price_5min, self.shares_held))
+                    self.open_position_time = None  # Zerar o timestamp de abertura da posição
 
         self.net_worth = self.balance + self.shares_held * current_price_5min
 
@@ -83,7 +88,9 @@ class CustomTradingEnv(gym.Env):
         return self._get_observation(), reward, self.done, {
             'shares': self.shares_held,
             'net_worth': self.net_worth,
-            'balance': self.balance
+            'balance': self.balance,
+            'step': self.current_step,
+            'trades': self.trades
         }
 
     def _get_observation(self):
