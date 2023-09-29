@@ -7,7 +7,11 @@ class CustomTradingEnv(gym.Env):
                  observation_window_5min=300, observation_window_daily=200):
         super(CustomTradingEnv, self).__init__()
         self.df_5min = df_5min
+        self.df_5min_closes = df_5min['Close'].to_numpy()
+        self.df_5min_highs = df_5min['High'].to_numpy()
+        self.df_5min_lows = df_5min['Low'].to_numpy()
         self.df_daily = df_daily
+        self.df_daily_closes = df_daily['Close'].to_numpy()
         self.initial_balance = initial_balance
         self.take_profit = take_profit
         self.stop_loss = stop_loss
@@ -16,7 +20,7 @@ class CustomTradingEnv(gym.Env):
         self.reset()
 
         # Definir o espaço de ação e observação
-        self.action_space = gym.spaces.Discrete(3)  # Três ações possíveis: fazer nada, comprar, vender
+        self.action_space = gym.spaces.Discrete(4)  # Três ações possíveis: fazer nada, comprar, vender, fechar operação
         self.observation_space = gym.spaces.Box(low=0, high=np.inf, shape=(self.observation_window_5min + self.observation_window_daily + 5,), dtype=np.float32)
 
         # Definir a hora de fechamento das posições abertas
@@ -32,6 +36,7 @@ class CustomTradingEnv(gym.Env):
         self.observation_5min = []
         self.observation_daily = []
         self.open_position_time = None  # Hora de abertura da posição
+        self.lot_size = 1
         return self._get_observation()
 
     def step(self, action):
@@ -44,41 +49,36 @@ class CustomTradingEnv(gym.Env):
             self.done = True
             return self._get_observation(), 0, self.done, {}
 
-        current_price_5min = self.df_5min.iloc[self.current_step]['Close']
+        current_price_5min = self.df_5min_closes[self.current_step]
+        current_time = self.df_5min.index[self.current_step]
 
         if action == 1:  # Comprar
-            if self.balance > 0:
-                # shares_to_buy = min(self.balance // current_price_5min, int(self.balance / 2))  # Limitar o número de ações compradas
-                shares_to_buy = 1
-                cost = shares_to_buy * current_price_5min
-                self.balance -= cost
-                self.shares_held += shares_to_buy
-                self.trades.append((self.current_step, "Buy", current_price_5min, shares_to_buy))
-                self.open_position_time = self.df_5min.index[self.current_step]  # Registrar o timestamp de abertura da posição
+            cost = self.lot_size * current_price_5min
+            self.balance -= cost
+            self.shares_held += self.lot_size
+            self.trades.append((self.current_step, "Buy", current_price_5min, self.lot_size))
+            self.open_position_time = self.df_5min.index[self.current_step]  # Registrar o timestamp de abertura da posição
 
         elif action == 2:  # Vender
-            if self.shares_held > 0:
-                revenue = self.shares_held * current_price_5min
-                self.balance += revenue
-                self.shares_held = 0
-                self.trades.append((self.current_step, "Sell", current_price_5min, self.shares_held))
-                self.open_position_time = None  # Zerar o timestamp de abertura da posição
+            revenue = self.shares_held * current_price_5min
+            self.balance += revenue
+            self.shares_held = 0
+            self.trades.append((self.current_step, "Sell", current_price_5min, self.shares_held))
+            self.open_position_time = None  # Zerar o timestamp de abertura da posição
+
+        elif action == 3 or current_time.time() >= self.closing_time: # Fechar posições abertas
+            revenue = self.shares_held * current_price_5min
+            self.balance += revenue
+            self.shares_held = 0
+            self.trades.append((self.current_step, "Close", current_price_5min, self.shares_held))
+            self.open_position_time = None  # Zerar o timestamp de abertura da posição
 
         # Verificar se atingimos o take profit ou stop loss
+        # TODO: refazer a logica do TP e SL
         unrealized_profit = (current_price_5min - self.trades[-1][2]) * self.trades[-1][3] if self.trades else 0
-        reward = unrealized_profit
+        reward = unrealized_profit       
 
-        if self.open_position_time is not None:
-            current_time = self.df_5min.index[self.current_step]
-            if current_time.time() >= self.closing_time:
-                # Fechar a posição automaticamente se estiver aberta após as 17:00
-                if self.shares_held > 0:
-                    revenue = self.shares_held * current_price_5min
-                    self.balance += revenue
-                    self.shares_held = 0
-                    self.trades.append((self.current_step, "Sell", current_price_5min, self.shares_held))
-                    self.open_position_time = None  # Zerar o timestamp de abertura da posição
-
+        # TODO: refazer a logica do reward
         self.net_worth = self.balance + self.shares_held * current_price_5min
 
         # Verificar se o saldo está abaixo de -1000 quando não há posições abertas
@@ -98,10 +98,11 @@ class CustomTradingEnv(gym.Env):
 
     def _get_observation(self):
         # Obter preços do M5 e D1 para observação
-        self.observation_5min = self.df_5min['Close'].to_numpy()[-self.observation_window_5min:].tolist()
+        self.observation_5min = self.df_5min_closes[-self.observation_window_5min:].tolist()
         dailyStep = self.df_daily.index.get_loc(pd.Timestamp(self.df_5min.index[self.current_step].date()))
-        self.observation_daily = self.df_daily['Close'].to_numpy()[dailyStep-self.observation_window_daily:dailyStep].tolist()
+        self.observation_daily = self.df_daily_closes[dailyStep-self.observation_window_daily:dailyStep].tolist()
 
+        # TODO: adicionar dados de observações dos preços máximos e mínimos (Talvez não precise...)
         observation = np.array(self.observation_5min + self.observation_daily + [self.shares_held])
         # Adicionar o dia da semana, dia do mês, hora e minuto do timestep atual
         current_time = self.df_5min.index[self.current_step]
