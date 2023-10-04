@@ -21,7 +21,18 @@ class CustomTradingEnv(gym.Env):
 
         # Definir o espaço de ação e observação
         self.action_space = gym.spaces.Discrete(4)  # Três ações possíveis: fazer nada, comprar, vender, fechar operação
-        self.observation_space = gym.spaces.Box(low=0, high=np.inf, shape=(self.observation_window_5min + self.observation_window_daily + 5,), dtype=np.float32)
+        self.observation_space = gym.spaces.Dict(
+            {
+                'M5_hist': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_5min,), dtype=np.float32),
+                'D1_hist': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_daily + 6,), dtype=np.float32),
+                'shares_held': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+                'balance': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+                'day': gym.spaces.Discrete(31),
+                'dayofweek': gym.spaces.Discrete(7),
+                'hour': gym.spaces.Discrete(9, start=9),
+                'minute': gym.spaces.Discrete(60),
+            }
+        )
 
         # Definir a hora de fechamento das posições abertas
         self.closing_time = pd.Timestamp("17:00").time()
@@ -57,21 +68,18 @@ class CustomTradingEnv(gym.Env):
             self.balance -= cost
             self.shares_held += self.lot_size
             self.trades.append((self.current_step, "Buy", current_price_5min, self.shares_held))
-            self.open_position_time = self.df_5min.index[self.current_step]  # Registrar o timestamp de abertura da posição
 
         elif action == 2:  # Vender
             cost = -self.lot_size * current_price_5min
             self.balance -= cost
             self.shares_held += -self.lot_size
             self.trades.append((self.current_step, "Sell", current_price_5min, self.shares_held))
-            self.open_position_time = self.df_5min.index[self.current_step]  # Registrar o timestamp de abertura da posição
 
         elif action == 3 or current_time.time() >= self.closing_time: # Fechar posições abertas
             revenue = self.shares_held * current_price_5min
             self.balance += revenue
             self.shares_held = 0
             self.trades.append((self.current_step, "Close", current_price_5min, self.shares_held))
-            self.open_position_time = None  # Zerar o timestamp de abertura da posição
 
         # Testando um ambiente sem regras fixas de TP e SL
         # unrealized_profit = (current_price_5min - self.trades[-1][2]) * self.trades[-1][3] if self.trades else 0
@@ -87,29 +95,46 @@ class CustomTradingEnv(gym.Env):
         if reward < -1000 or self.current_step == len(self.df_5min) - 1:
             self.done = True
 
-        return self._get_observation(), reward, self.done, {
+        info = {
             'shares': self.shares_held,
             'profit (reward)': self.profit,
             'balance': self.balance,
-            'step': self.current_step,
-            'trades': self.trades
+            'step': self.current_step
         }
+        if self.done:   # Adiciona trades apenas quando finalizar
+            info['trades'] = self.trades
+
+        return self._get_observation(), reward, self.done, info
 
     def _get_observation(self):
         # Obter preços do M5 e D1 para observação
-        self.observation_5min = self.df_5min_closes[-self.observation_window_5min:].tolist()
+        self.observation_5min = self.df_5min_closes[self.current_step-self.observation_window_5min:self.current_step]
         dailyStep = self.df_daily.index.get_loc(pd.Timestamp(self.df_5min.index[self.current_step].date()))
-        self.observation_daily = self.df_daily_closes[dailyStep-self.observation_window_daily:dailyStep].tolist()
+        self.observation_daily = self.df_daily_closes[dailyStep-self.observation_window_daily:dailyStep]
+
+        # Normalização
+        minVal = np.min(self.observation_5min)
+        maxVal = np.max(self.observation_5min)
+        self.observation_5min = (self.observation_5min - minVal) / (maxVal - minVal)
+
+        minVal = np.min(self.observation_daily)
+        maxVal = np.max(self.observation_daily)
+        self.observation_daily = (self.observation_daily - minVal) / (maxVal - minVal)
 
         # TODO: adicionar dados de observações dos preços máximos e mínimos (Talvez não precise...)
-        observation = np.array(self.observation_5min + self.observation_daily + [self.shares_held, self.balance])
+
         # Adicionar o dia da semana, dia do mês, hora e minuto do timestep atual
         current_time = self.df_5min.index[self.current_step]
-        day_of_week = current_time.dayofweek
-        day_of_month = current_time.day
-        current_hour = current_time.hour
-        current_minute = current_time.minute
-        observation = np.append(observation, [day_of_week, day_of_month, current_hour, current_minute])
+        observation = {
+                'M5_hist': self.observation_5min,
+                'D1_hist': self.observation_daily,
+                'shares_held': self.shares_held,
+                'balance': self.balance,
+                'day': current_time.day,
+                'dayofweek': current_time.dayofweek,
+                'hour': current_time.hour,
+                'minute': current_time.minute,
+        }
         return observation
 
     def render(self, mode='human'):
