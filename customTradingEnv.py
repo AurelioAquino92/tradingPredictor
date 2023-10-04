@@ -24,7 +24,7 @@ class CustomTradingEnv(gym.Env):
         self.observation_space = gym.spaces.Dict(
             {
                 'M5_hist': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_5min,), dtype=np.float32),
-                'D1_hist': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_daily + 6,), dtype=np.float32),
+                'D1_hist': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_daily,), dtype=np.float32),
                 'shares_held': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
                 'balance': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
                 'day': gym.spaces.Discrete(31),
