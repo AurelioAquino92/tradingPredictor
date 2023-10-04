@@ -10,8 +10,10 @@ class CustomTradingEnv(gym.Env):
         self.df_5min_closes = df_5min['Close'].to_numpy()
         self.df_5min_highs = df_5min['High'].to_numpy()
         self.df_5min_lows = df_5min['Low'].to_numpy()
+        self.df_5min_volumes = df_5min['Volume'].to_numpy()
         self.df_daily = df_daily
         self.df_daily_closes = df_daily['Close'].to_numpy()
+        self.df_daily_volumes = df_daily['Volume'].to_numpy()
         self.initial_balance = initial_balance
         self.take_profit = take_profit
         self.stop_loss = stop_loss
@@ -23,14 +25,17 @@ class CustomTradingEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(4)  # Três ações possíveis: fazer nada, comprar, vender, fechar operação
         self.observation_space = gym.spaces.Dict(
             {
-                'M5_hist': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_5min,), dtype=np.float32),
-                'D1_hist': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_daily,), dtype=np.float32),
+                'M5_closes': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_5min,), dtype=np.float32),
+                'D1_closes': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_daily,), dtype=np.float32),
+                'M5_volumes': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_5min,), dtype=np.float32),
+                'D1_volumes': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_daily,), dtype=np.float32),
                 'shares_held': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
-                'balance': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
-                'day': gym.spaces.Discrete(31),
-                'dayofweek': gym.spaces.Discrete(7),
-                'hour': gym.spaces.Discrete(9, start=9),
-                'minute': gym.spaces.Discrete(60),
+                'price': gym.spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32),
+                'volume': gym.spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32),
+                'day': gym.spaces.Discrete(32, start=1),
+                'dayofweek': gym.spaces.Discrete(5),
+                'hour': gym.spaces.Discrete(19, start=9),
+                'minute': gym.spaces.Discrete(60)
             }
         )
 
@@ -45,8 +50,9 @@ class CustomTradingEnv(gym.Env):
         self.trades = []  # Manter um registro de todas as negociações
         self.done = False
         self.observation_5min = []
+        self.observation_5min_volume = []
         self.observation_daily = []
-        self.open_position_time = None  # Hora de abertura da posição
+        self.observation_daily_volume = []
         self.lot_size = 1
         return self._get_observation()
 
@@ -109,8 +115,10 @@ class CustomTradingEnv(gym.Env):
     def _get_observation(self):
         # Obter preços do M5 e D1 para observação
         self.observation_5min = self.df_5min_closes[self.current_step-self.observation_window_5min:self.current_step]
+        self.observation_5min_volume = self.df_5min_volumes[self.current_step-self.observation_window_5min:self.current_step]
         dailyStep = self.df_daily.index.get_loc(pd.Timestamp(self.df_5min.index[self.current_step].date()))
         self.observation_daily = self.df_daily_closes[dailyStep-self.observation_window_daily:dailyStep]
+        self.observation_daily_volume = self.df_daily_volumes[dailyStep-self.observation_window_daily:dailyStep]
 
         # Normalização
         minVal = np.min(self.observation_5min)
@@ -121,19 +129,30 @@ class CustomTradingEnv(gym.Env):
         maxVal = np.max(self.observation_daily)
         self.observation_daily = (self.observation_daily - minVal) / (maxVal - minVal)
 
+        minVal = np.min(self.observation_5min_volume)
+        maxVal = np.max(self.observation_5min_volume)
+        self.observation_5min_volume = (self.observation_5min_volume - minVal) / (maxVal - minVal)
+
+        minVal = np.min(self.observation_daily_volume)
+        maxVal = np.max(self.observation_daily_volume)
+        self.observation_daily_volume = (self.observation_daily_volume - minVal) / (maxVal - minVal)
+
         # TODO: adicionar dados de observações dos preços máximos e mínimos (Talvez não precise...)
 
         # Adicionar o dia da semana, dia do mês, hora e minuto do timestep atual
         current_time = self.df_5min.index[self.current_step]
         observation = {
-                'M5_hist': self.observation_5min,
-                'D1_hist': self.observation_daily,
-                'shares_held': self.shares_held,
-                'balance': self.balance,
-                'day': current_time.day,
-                'dayofweek': current_time.dayofweek,
-                'hour': current_time.hour,
-                'minute': current_time.minute,
+            'M5_closes': self.observation_5min,
+            'D1_closes': self.observation_daily,
+            'M5_volumes': self.observation_5min_volume,
+            'D1_volumes': self.observation_daily_volume,
+            'shares_held': self.shares_held,
+            'price': self.df_5min_closes[self.current_step],
+            'volume': self.df_5min_volumes[self.current_step],
+            'day': current_time.day,
+            'dayofweek': current_time.dayofweek,
+            'hour': current_time.hour,
+            'minute': current_time.minute,
         }
         return observation
 
