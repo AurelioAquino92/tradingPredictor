@@ -81,7 +81,7 @@ class CustomTradingEnv(gym.Env):
             self.shares_held += -self.lot_size
             self.trades.append((self.current_step, "Sell", current_price_5min, self.shares_held))
 
-        elif action == 3 or current_time.time() >= self.closing_time: # Fechar posições abertas
+        elif action == 3 or (self.shares_held != 0 and current_time.time() >= self.closing_time): # Fechar posições abertas
             revenue = self.shares_held * current_price_5min
             self.balance += revenue
             self.shares_held = 0
