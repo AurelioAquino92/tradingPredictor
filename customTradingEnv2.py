@@ -136,7 +136,7 @@ class CustomTradingEnv(gym.Env):
 
         # Normalização
         minVal = min(self.observation_5min.min(), self.observation_5min_highs.min(), self.observation_5min_lows.min())
-        maxVal = max(self.observation_5min.min(), self.observation_5min_highs.min(), self.observation_5min_lows.min())
+        maxVal = max(self.observation_5min.max(), self.observation_5min_highs.max(), self.observation_5min_lows.max())
         
         self.observation_5min = (self.observation_5min - minVal) / (maxVal - minVal)
         self.observation_5min_highs = (self.observation_5min_highs - minVal) / (maxVal - minVal)
