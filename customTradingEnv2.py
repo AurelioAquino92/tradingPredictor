@@ -127,14 +127,16 @@ class CustomTradingEnv(gym.Env):
     def _get_observation(self):
         # Obter preços do M5 e D1 para observação
         self.observation_5min = self.df_5min_closes[self.current_step-self.observation_window_5min:self.current_step]
+        self.observation_5min_highs = self.df_5min_highs[self.current_step-self.observation_window_5min:self.current_step]
+        self.observation_5min_lows = self.df_5min_lows[self.current_step-self.observation_window_5min:self.current_step]
         self.observation_5min_volume = self.df_5min_volumes[self.current_step-self.observation_window_5min:self.current_step]
         dailyStep = self.df_daily.index.get_loc(pd.Timestamp(self.df_5min.index[self.current_step].date()))
         self.observation_daily = self.df_daily_closes[dailyStep-self.observation_window_daily:dailyStep]
         self.observation_daily_volume = self.df_daily_volumes[dailyStep-self.observation_window_daily:dailyStep]
 
         # Normalização
-        minVal = np.min(np.append(self.observation_5min, [self.observation_5min_highs, self.observation_5min_lows]))
-        maxVal = np.max(np.append(self.observation_5min, [self.observation_5min_highs, self.observation_5min_lows]))
+        minVal = min(self.observation_5min.min(), self.observation_5min_highs.min(), self.observation_5min_lows.min())
+        maxVal = max(self.observation_5min.min(), self.observation_5min_highs.min(), self.observation_5min_lows.min())
         
         self.observation_5min = (self.observation_5min - minVal) / (maxVal - minVal)
         self.observation_5min_highs = (self.observation_5min_highs - minVal) / (maxVal - minVal)
