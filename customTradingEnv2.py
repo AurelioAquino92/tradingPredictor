@@ -74,7 +74,7 @@ class CustomTradingEnv(gym.Env):
 
         operation_profit = None
         
-        if action == 1:  # Comprar
+        if action['operation'] == 1:  # Comprar
             self.trades.append((self.current_step, "Buy", current_price_5min))
             for i in range(1, action['candle_limit']):
                 if self.df_5min_highs[self.current_step + i] >= current_price_5min + action['take_profit']:
@@ -90,7 +90,7 @@ class CustomTradingEnv(gym.Env):
             if operation_profit is None:
                 operation_profit = self.df_5min_closes[self.current_step + action['candle_limit']] - current_price_5min
 
-        elif action == 2:  # Vender
+        elif action['operation'] == 2:  # Vender
             self.trades.append((self.current_step, "Sell", current_price_5min))
             for i in range(1, action['candle_limit']):
                 if self.df_5min_lows[self.current_step + i] <= current_price_5min - action['take_profit']:
@@ -137,8 +137,8 @@ class CustomTradingEnv(gym.Env):
         self.observation_daily_volume = self.df_daily_volumes[dailyStep-self.observation_window_daily:dailyStep]
 
         # Normalização
-        minVal = np.min([self.observation_5min, self.observation_5min_highs, self.observation_5min_lows])
-        maxVal = np.max([self.observation_5min, self.observation_5min_highs, self.observation_5min_lows])
+        minVal = np.min(np.append(self.observation_5min, [self.observation_5min_highs, self.observation_5min_lows]))
+        maxVal = np.max(np.append(self.observation_5min, [self.observation_5min_highs, self.observation_5min_lows]))
         
         self.observation_5min = (self.observation_5min - minVal) / (maxVal - minVal)
         self.observation_5min_highs = (self.observation_5min_highs - minVal) / (maxVal - minVal)
