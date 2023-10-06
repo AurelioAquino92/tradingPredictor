@@ -34,7 +34,6 @@ class CustomTradingEnv(gym.Env):
                 'M5_volumes': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_5min,), dtype=np.float32),
                 'D1_closes': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_daily,), dtype=np.float32),
                 'D1_volumes': gym.spaces.Box(low=0, high=1, shape=(self.observation_window_daily,), dtype=np.float32),
-                'shares_held': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
                 'price': gym.spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32),
                 'volume': gym.spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32),
                 'day': gym.spaces.Discrete(32, start=1),
@@ -48,9 +47,7 @@ class CustomTradingEnv(gym.Env):
         self.closing_time = pd.Timestamp("17:00").time()
 
     def reset(self):
-        self.balance = 100000
         self.current_step = self.observation_window_5min
-        self.shares_held = 0
         self.profit = 0
         self.trades = []  # Manter um registro de todas as negociações
         self.done = False
@@ -60,7 +57,6 @@ class CustomTradingEnv(gym.Env):
         self.observation_5min_volume = []
         self.observation_daily = []
         self.observation_daily_volume = []
-        self.lot_size = 1
         return self._get_observation()
 
     def step(self, action):
@@ -76,42 +72,55 @@ class CustomTradingEnv(gym.Env):
         current_price_5min = self.df_5min_closes[self.current_step]
         current_time = self.df_5min.index[self.current_step]
 
+        operation_profit = None
+        
         if action == 1:  # Comprar
-            cost = self.lot_size * current_price_5min
-            self.balance -= cost
-            self.shares_held += self.lot_size
-            self.trades.append((self.current_step, "Buy", current_price_5min, self.shares_held))
+            self.trades.append((self.current_step, "Buy", current_price_5min))
+            for i in range(1, action['candle_limit']):
+                if self.df_5min_highs[self.current_step + i] >= current_price_5min + action['take_profit']:
+                    operation_profit = action['take_profit']
+                    break
+                elif self.df_5min_lows[self.current_step + i] <= current_price_5min - action['stop_loss']:
+                    operation_profit = -action['stop_loss']
+                    break
+                # TODO: fechar operação às 17hs?
+                # if (current_time.time() >= self.closing_time
+                #     or self.current_step + i >= len(self.df_5min_closes)):
+                #     operation_profit = 
+            if operation_profit is None:
+                operation_profit = self.df_5min_closes[self.current_step + action['candle_limit']] - current_price_5min
 
         elif action == 2:  # Vender
-            cost = -self.lot_size * current_price_5min
-            self.balance -= cost
-            self.shares_held += -self.lot_size
-            self.trades.append((self.current_step, "Sell", current_price_5min, self.shares_held))
+            self.trades.append((self.current_step, "Sell", current_price_5min))
+            for i in range(1, action['candle_limit']):
+                if self.df_5min_lows[self.current_step + i] <= current_price_5min - action['take_profit']:
+                    operation_profit = action['take_profit']
+                    break
+                elif self.df_5min_highs[self.current_step + i] >= current_price_5min + action['stop_loss']:
+                    operation_profit = -action['stop_loss']
+                    break
+                # TODO: fechar operação às 17hs?
+                # if (current_time.time() >= self.closing_time
+                #     or self.current_step + i >= len(self.df_5min_closes)):
+                #     operation_profit = 
+            if operation_profit is None:
+                operation_profit = current_price_5min - self.df_5min_closes[self.current_step + action['candle_limit']]
 
-        elif action == 3 or current_time.time() >= self.closing_time: # Fechar posições abertas
-            revenue = self.shares_held * current_price_5min
-            self.balance += revenue
-            self.shares_held = 0
-            self.trades.append((self.current_step, "Close", current_price_5min, self.shares_held))
+        if operation_profit is None:
+            reward = 0
+        else:
+            reward = operation_profit
 
-        # Testando um ambiente sem regras fixas de TP e SL
-        # unrealized_profit = (current_price_5min - self.trades[-1][2]) * self.trades[-1][3] if self.trades else 0
-        # reward = unrealized_profit       
-
-        # reward
-        if self.shares_held == 0:
-            self.profit = self.balance - self.initial_balance
-        reward = self.profit
+        self.profit += reward
 
         # Verificar se o lucro está abaixo de -1000 quando não há posições abertas
         # Ou se o passo atual está no final do dataframe
-        if reward < -1000 or self.current_step == len(self.df_5min) - 1:
+        # O '40' dá a margem de segurança para ver o resultado da operação mais à frente
+        if self.profit < -1000 or self.current_step > len(self.df_5min) - 40:
             self.done = True
 
         info = {
-            'shares': self.shares_held,
-            'profit (reward)': self.profit,
-            'balance': self.balance,
+            'profit': self.profit,
             'step': self.current_step
         }
         if self.done:   # Adiciona trades apenas quando finalizar
@@ -158,7 +167,6 @@ class CustomTradingEnv(gym.Env):
             'M5_volumes': self.observation_5min_volume,
             'D1_closes': self.observation_daily,
             'D1_volumes': self.observation_daily_volume,
-            'shares_held': np.array([self.shares_held]),
             'price': np.array([self.df_5min_closes[self.current_step]]),
             'volume': np.array([self.df_5min_volumes[self.current_step]], dtype=np.int64),
             'day': current_time.day,
