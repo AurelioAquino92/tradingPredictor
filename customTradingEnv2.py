@@ -6,16 +6,16 @@ class CustomTradingEnv(gym.Env):
     def __init__(self, df_5min, df_daily):
         super(CustomTradingEnv, self).__init__()
         self.df_5min = df_5min
-        self.df_5min_closes = df_5min['Close'].to_numpy()
-        self.df_5min_highs = df_5min['High'].to_numpy()
-        self.df_5min_lows = df_5min['Low'].to_numpy()
-        self.df_5min_volumes = df_5min['Volume'].to_numpy()
+        self.df_5min_closes = df_5min['close'].to_numpy()
+        self.df_5min_highs = df_5min['high'].to_numpy()
+        self.df_5min_lows = df_5min['low'].to_numpy()
+        self.df_5min_volumes = df_5min['real_volume'].to_numpy()
         self.df_daily = df_daily
-        self.df_daily_closes = df_daily['Close'].to_numpy()
-        self.df_daily_volumes = df_daily['Volume'].to_numpy()
+        self.df_daily_closes = df_daily['close'].to_numpy()
+        self.df_daily_volumes = df_daily['real_volume'].to_numpy()
         self.observation_window_5min = 300
         self.observation_window_daily = 200
-        self.take_profit = 30
+        self.take_profit = 40
         self.stop_loss = 10
         self.candle_limit = 36
         self.reset()
